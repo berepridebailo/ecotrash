@@ -92,7 +92,7 @@ export default function App() {
   )
   const [selectedPoint, setSelectedPoint] = useState<RecyclingPoint | null>(null)
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
-  const [locationError, setLocationError] = useState<string | null>(null)
+  const [locationError] = useState<string | null>(null)
   const [recenterTarget, setRecenterTarget] = useState<[number, number] | null>(null)
   const [mobileListOpen, setMobileListOpen] = useState(false)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
@@ -100,7 +100,6 @@ export default function App() {
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null)
   const [activeView, setActiveView] = useState<'map' | 'info'>('map')
   const mapRef = useRef<L.Map | null>(null)
-  const watchIdRef = useRef<number | null>(null)
 
   const fetchPoints = async () => {
     const { data, error } = await supabase
@@ -136,26 +135,8 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setLocationError('Tu navegador no soporta geolocalización.')
-      return
-    }
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        setUserLocation([pos.coords.latitude, pos.coords.longitude])
-        setLocationAccuracy(pos.coords.accuracy ?? null)
-        setLocationError(null)
-      },
-      () => {
-        setLocationError('No se pudo obtener tu ubicación. No es posible calcular la distancia.')
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
-    )
-    return () => {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current)
-      }
-    }
+    setUserLocation(VIEDMA_CENTER)
+    setLocationAccuracy(20)
   }, [])
 
   const filteredPoints = useMemo(() => {
@@ -181,21 +162,7 @@ export default function App() {
   }
 
   const handleLocateMe = () => {
-    if (userLocation) {
-      setRecenterTarget(userLocation)
-    } else if (locationError) {
-      // already have error
-    } else {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude]
-          setUserLocation(loc)
-          setRecenterTarget(loc)
-        },
-        () => setLocationError('No se pudo obtener tu ubicación.'),
-        { enableHighAccuracy: true, timeout: 10000 }
-      )
-    }
+    setRecenterTarget(VIEDMA_CENTER)
   }
 
   const nearestPoint = useMemo(() => {
