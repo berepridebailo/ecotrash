@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { supabase, type RecyclingPoint, type PointType } from './supabase'
 import { FilterBar } from './components/FilterBar'
@@ -7,6 +7,16 @@ import { PointDetail } from './components/PointDetail'
 import { PointList } from './components/PointList'
 
 const VIEDMA_CENTER: [number, number] = [-40.8135, -62.9965]
+
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLon = ((lon2 - lon1) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
 
 const TYPE_CONFIG: Record<PointType, { label: string; emoji: string; color: string; bg: string }> = {
   recycling: { label: 'Reciclaje', emoji: '♻️', color: '#059669', bg: '#d1fae5' },
@@ -85,7 +95,9 @@ export default function App() {
   const [mobileListOpen, setMobileListOpen] = useState(false)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [mapBounds, setMapBounds] = useState<L.LatLngBounds | null>(null)
+  const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null)
   const mapRef = useRef<L.Map | null>(null)
+  const watchIdRef = useRef<number | null>(null)
 
   const fetchPoints = async () => {
     const { data, error } = await supabase
@@ -125,15 +137,22 @@ export default function App() {
       setLocationError('Tu navegador no soporta geolocalización.')
       return
     }
-    navigator.geolocation.getCurrentPosition(
+    watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         setUserLocation([pos.coords.latitude, pos.coords.longitude])
+        setLocationAccuracy(pos.coords.accuracy ?? null)
+        setLocationError(null)
       },
       () => {
-        setLocationError('No se pudo obtener tu ubicación. Puedes navegar el mapa manualmente.')
+        setLocationError('No se pudo obtener tu ubicación. No es posible calcular la distancia.')
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
     )
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current)
+      }
+    }
   }, [])
 
   const filteredPoints = useMemo(() => {
@@ -174,6 +193,25 @@ export default function App() {
         { enableHighAccuracy: true, timeout: 10000 }
       )
     }
+  }
+
+  const nearestPoint = useMemo(() => {
+    if (!userLocation || filteredPoints.length === 0) return null
+    let best = filteredPoints[0]
+    let bestDist = haversineDistance(userLocation[0], userLocation[1], best.latitude, best.longitude)
+    for (let i = 1; i < filteredPoints.length; i++) {
+      const d = haversineDistance(userLocation[0], userLocation[1], filteredPoints[i].latitude, filteredPoints[i].longitude)
+      if (d < bestDist) {
+        best = filteredPoints[i]
+        bestDist = d
+      }
+    }
+    return { point: best, distance: bestDist }
+  }, [userLocation, filteredPoints])
+
+  const formatDistance = (km: number) => {
+    if (km < 1) return `${Math.round(km * 1000)} m`
+    return `${km.toFixed(1)} km`
   }
 
   const counts = useMemo(() => {
@@ -431,16 +469,104 @@ export default function App() {
               </Marker>
             ))}
 
+            {userLocation && nearestPoint && (
+              <Polyline
+                positions={[
+                  userLocation,
+                  [nearestPoint.point.latitude, nearestPoint.point.longitude],
+                ]}
+                pathOptions={{
+                  color: '#0ea5e9',
+                  weight: 3,
+                  opacity: 0.6,
+                  dashArray: '8 12',
+                }}
+              />
+            )}
+
             {userLocation && (
               <Marker position={userLocation} icon={createUserLocationIcon()}>
                 <Popup>
                   <div style={{ padding: '8px 12px' }}>
                     <strong>Estás aquí</strong>
+                    {locationAccuracy !== null && locationAccuracy > 50 && (
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                        Ubicación aproximada (±{Math.round(locationAccuracy)} m)
+                      </div>
+                    )}
                   </div>
                 </Popup>
               </Marker>
             )}
           </MapContainer>
+
+          {/* Nearest point info banner */}
+          {nearestPoint && (
+            <div
+              className="animate-fade-in-up"
+              style={{
+                position: 'absolute',
+                bottom: 24,
+                right: 16,
+                maxWidth: 300,
+                padding: '14px 18px',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--color-neutral-0)',
+                border: '1px solid var(--color-neutral-200)',
+                boxShadow: 'var(--shadow-lg)',
+                zIndex: 1000,
+                cursor: 'pointer',
+              }}
+              onClick={() => handlePointSelect(nearestPoint.point)}
+            >
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-secondary-600)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+                Punto más cercano
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 18 }}>{TYPE_CONFIG[nearestPoint.point.type].emoji}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-neutral-900)' }}>
+                  {nearestPoint.point.name}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--color-neutral-600)' }}>
+                <span style={{ fontWeight: 700, color: 'var(--color-secondary-600)' }}>
+                  {formatDistance(nearestPoint.distance)}
+                </span>
+                <span>· {nearestPoint.point.address}</span>
+              </div>
+              {locationAccuracy !== null && locationAccuracy > 50 && (
+                <div style={{ fontSize: 11, color: 'var(--color-warning-600)', marginTop: 6 }}>
+                  ⚠ Ubicación imprecisa (±{Math.round(locationAccuracy)} m)
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Location unavailable for distance */}
+          {!userLocation && locationError && !loading && (
+            <div
+              className="animate-fade-in-up"
+              style={{
+                position: 'absolute',
+                bottom: 24,
+                right: 16,
+                maxWidth: 280,
+                padding: '12px 16px',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--color-neutral-100)',
+                border: '1px solid var(--color-neutral-200)',
+                color: 'var(--color-neutral-600)',
+                fontSize: 13,
+                boxShadow: 'var(--shadow-md)',
+                zIndex: 1000,
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 2, color: 'var(--color-neutral-700)' }}>
+                No se puede calcular la distancia
+              </div>
+              Activa tu ubicación para encontrar el punto más cercano.
+            </div>
+          )}
 
           {/* No results in visible area */}
           {!loading && !error && filteredPoints.length > 0 && !pointsVisibleInMap && (
