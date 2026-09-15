@@ -1,4 +1,6 @@
 import type { RecyclingPoint, PointType } from '../supabase'
+import { getScheduleInfo } from '../utils/scheduleParser'
+import { OpenClosedBadge } from './OpenClosedBadge'
 
 interface TypeConfigItem {
   label: string
@@ -29,6 +31,7 @@ export function PointDetail({ point, onClose, typeConfig, userLocation }: PointD
   const distance = userLocation
     ? haversineDistance(userLocation[0], userLocation[1], point.latitude, point.longitude)
     : null
+  const scheduleInfo = getScheduleInfo(point.schedule)
 
   const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${point.latitude},${point.longitude}`
 
@@ -94,6 +97,14 @@ export function PointDetail({ point, onClose, typeConfig, userLocation }: PointD
           >
             {config.label}
           </span>
+          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <OpenClosedBadge scheduleInfo={scheduleInfo} />
+            {scheduleInfo.hasSchedule && !scheduleInfo.isAlwaysOpen && (
+              <span style={{ fontSize: 12, color: 'var(--color-neutral-500)' }}>
+                {scheduleInfo.detail}
+              </span>
+            )}
+          </div>
         </div>
         <button
           onClick={onClose}
@@ -144,11 +155,11 @@ export function PointDetail({ point, onClose, typeConfig, userLocation }: PointD
         )}
 
         {/* Schedule */}
-        {point.schedule && (
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-500)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Horarios
-            </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-500)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Horarios de atención
+          </div>
+          {point.schedule ? (
             <div
               style={{
                 fontSize: 14,
@@ -161,8 +172,22 @@ export function PointDetail({ point, onClose, typeConfig, userLocation }: PointD
             >
               🕐 {point.schedule}
             </div>
-          </div>
-        )}
+          ) : (
+            <div
+              style={{
+                fontSize: 14,
+                color: 'var(--color-neutral-500)',
+                padding: '12px 16px',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--color-neutral-50)',
+                border: '1px solid var(--color-neutral-100)',
+                fontStyle: 'italic',
+              }}
+            >
+              No hay información de horarios disponible para este punto.
+            </div>
+          )}
+        </div>
 
         {/* Accepted materials */}
         {point.accepted_materials && point.accepted_materials.length > 0 && (

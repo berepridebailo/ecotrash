@@ -2,9 +2,11 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { supabase, type RecyclingPoint, type PointType } from './supabase'
+import { getScheduleInfo } from './utils/scheduleParser'
 import { FilterBar } from './components/FilterBar'
 import { PointDetail } from './components/PointDetail'
 import { PointList } from './components/PointList'
+import { InfoView } from './components/InfoView'
 
 const VIEDMA_CENTER: [number, number] = [-40.8135, -62.9965]
 
@@ -96,6 +98,7 @@ export default function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [mapBounds, setMapBounds] = useState<L.LatLngBounds | null>(null)
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null)
+  const [activeView, setActiveView] = useState<'map' | 'info'>('map')
   const mapRef = useRef<L.Map | null>(null)
   const watchIdRef = useRef<number | null>(null)
 
@@ -274,30 +277,75 @@ export default function App() {
             </p>
           </div>
         </div>
-        <button
-          onClick={handleLocateMe}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '8px 16px',
-            borderRadius: 'var(--radius-md)',
-            background: 'var(--color-secondary-500)',
-            color: 'white',
-            border: 'none',
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: 'pointer',
-            transition: 'background 0.2s',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-secondary-600)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--color-secondary-500)')}
-        >
-          📍 Mi ubicación
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <nav style={{ display: 'flex', gap: 4 }}>
+            <button
+              onClick={() => setActiveView('map')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px',
+                borderRadius: 'var(--radius-md)',
+                background: activeView === 'map' ? 'var(--color-primary-50)' : 'transparent',
+                border: 'none',
+                color: activeView === 'map' ? 'var(--color-primary-700)' : 'var(--color-neutral-500)',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              🗺️ Mapa
+            </button>
+            <button
+              onClick={() => setActiveView('info')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px',
+                borderRadius: 'var(--radius-md)',
+                background: activeView === 'info' ? 'var(--color-primary-50)' : 'transparent',
+                border: 'none',
+                color: activeView === 'info' ? 'var(--color-primary-700)' : 'var(--color-neutral-500)',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              ♻️ Guía
+            </button>
+          </nav>
+          <button
+            onClick={handleLocateMe}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 16px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--color-secondary-500)',
+              color: 'white',
+              border: 'none',
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'background 0.2s',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-secondary-600)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--color-secondary-500)')}
+          >
+            📍 Mi ubicación
+          </button>
+        </div>
       </header>
 
       {/* Main content */}
+      {activeView === 'info' ? (
+        <InfoView onBack={() => setActiveView('map')} />
+      ) : (
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {/* Sidebar */}
         <aside
@@ -447,6 +495,17 @@ export default function App() {
                         🕐 {point.schedule}
                       </div>
                     )}
+                    {(() => {
+                      const si = getScheduleInfo(point.schedule)
+                      if (!si.hasSchedule) return null
+                      const color = si.isOpen ? '#059669' : '#ef4444'
+                      return (
+                        <div style={{ fontSize: 11, fontWeight: 600, color, marginBottom: 4 }}>
+                          <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: color, marginRight: 5 }} />
+                          {si.isOpen ? 'Abierto ahora' : 'Cerrado'}
+                        </div>
+                      )
+                    })()}
                     <button
                       onClick={() => handlePointSelect(point)}
                       style={{
@@ -649,12 +708,14 @@ export default function App() {
           />
         )}
       </div>
+      )}
 
       <style>{`
         @media (max-width: 768px) {
           .sidebar-desktop { display: none !important; }
           .mobile-list-toggle { display: flex !important; }
           .mobile-list-overlay { display: flex !important; }
+          .info-mobile-detail { display: block !important; }
         }
       `}</style>
     </div>

@@ -1,4 +1,5 @@
 import type { RecyclingPoint, PointType } from '../supabase'
+import { getScheduleInfo } from '../utils/scheduleParser'
 
 interface TypeConfigItem {
   label: string
@@ -152,6 +153,32 @@ export function PointList({
                 >
                   {config.label}
                 </span>
+                {(() => {
+                  const si = getScheduleInfo(point.schedule)
+                  if (!si.hasSchedule) return null
+                  return (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: si.isOpen ? 'var(--color-success-600)' : 'var(--color-error-600)',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: si.isOpen ? 'var(--color-success-500)' : 'var(--color-error-500)',
+                        }}
+                      />
+                      {si.isOpen ? 'Abierto' : 'Cerrado'}
+                    </span>
+                  )
+                })()}
                 {distance !== null && (
                   <span style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>
                     {distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(1)} km`}
