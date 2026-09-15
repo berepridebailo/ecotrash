@@ -56,6 +56,21 @@ function FitBounds({ points }: { points: RecyclingPoint[] }) {
   return null
 }
 
+function TrackBounds({ onBoundsChange }: { onBoundsChange: (bounds: L.LatLngBounds) => void }) {
+  const map = useMap()
+  useEffect(() => {
+    const handler = () => onBoundsChange(map.getBounds())
+    handler()
+    map.on('moveend', handler)
+    map.on('zoomend', handler)
+    return () => {
+      map.off('moveend', handler)
+      map.off('zoomend', handler)
+    }
+  }, [map, onBoundsChange])
+  return null
+}
+
 export default function App() {
   const [points, setPoints] = useState<RecyclingPoint[]>([])
   const [loading, setLoading] = useState(true)
@@ -68,23 +83,41 @@ export default function App() {
   const [locationError, setLocationError] = useState<string | null>(null)
   const [recenterTarget, setRecenterTarget] = useState<[number, number] | null>(null)
   const [mobileListOpen, setMobileListOpen] = useState(false)
+  const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [mapBounds, setMapBounds] = useState<L.LatLngBounds | null>(null)
   const mapRef = useRef<L.Map | null>(null)
 
-  useEffect(() => {
-    async function fetchPoints() {
-      const { data, error } = await supabase
-        .from('recycling_points')
-        .select('*')
-        .order('name')
+  const fetchPoints = async () => {
+    const { data, error } = await supabase
+      .from('recycling_points')
+      .select('*')
+      .order('name')
 
-      if (error) {
-        setError('No se pudieron cargar los puntos. Intenta de nuevo más tarde.')
-      } else {
-        setPoints(data ?? [])
-      }
-      setLoading(false)
+    if (error) {
+      setError('No se pudieron cargar los puntos. Intenta de nuevo más tarde.')
+    } else {
+      setPoints(data ?? [])
+      setError(null)
     }
+    setLoading(false)
+  }
+
+  useEffect(() => {
     fetchPoints()
+  }, [])
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true)
+      fetchPoints()
+    }
+    const handleOffline = () => setIsOnline(false)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
   }, [])
 
   useEffect(() => {
@@ -150,6 +183,17 @@ export default function App() {
     }
     return c
   }, [points])
+
+  const pointsVisibleInMap = useMemo(() => {
+    if (!mapBounds) return filteredPoints.length > 0
+    return filteredPoints.some((p) =>
+      mapBounds.contains(L.latLng(p.latitude, p.longitude))
+    )
+  }, [filteredPoints, mapBounds])
+
+  const handleBoundsChange = (bounds: L.LatLngBounds) => {
+    setMapBounds(bounds)
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
@@ -341,6 +385,7 @@ export default function App() {
             />
             <FitBounds points={filteredPoints} />
             <RecenterMap center={recenterTarget} />
+            <TrackBounds onBoundsChange={handleBoundsChange} />
 
             {filteredPoints.map((point) => (
               <Marker
@@ -396,6 +441,54 @@ export default function App() {
               </Marker>
             )}
           </MapContainer>
+
+          {/* No results in visible area */}
+          {!loading && !error && filteredPoints.length > 0 && !pointsVisibleInMap && (
+            <div
+              className="animate-fade-in-up"
+              style={{
+                position: 'absolute',
+                top: 16,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                padding: '10px 20px',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--color-neutral-800)',
+                color: 'white',
+                fontSize: 13,
+                fontWeight: 500,
+                boxShadow: 'var(--shadow-lg)',
+                zIndex: 1000,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              No hay puntos visibles en esta área del mapa
+            </div>
+          )}
+
+          {/* Offline banner */}
+          {!isOnline && (
+            <div
+              className="animate-fade-in-up"
+              style={{
+                position: 'absolute',
+                top: 16,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                padding: '10px 20px',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--color-error-500)',
+                color: 'white',
+                fontSize: 13,
+                fontWeight: 600,
+                boxShadow: 'var(--shadow-lg)',
+                zIndex: 1000,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Sin conexión a internet — mostrando datos guardados
+            </div>
+          )}
 
           {/* Location error toast */}
           {locationError && (

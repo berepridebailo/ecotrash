@@ -61,9 +61,25 @@ export function PointList({
     )
   }
 
+  if (sortedPoints.length === 0 && points.length === 0 && !error) {
+    return (
+      <div style={{ padding: 32, textAlign: 'center', color: 'var(--color-neutral-500)', fontSize: 14, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>📭</div>
+        <strong style={{ display: 'block', color: 'var(--color-neutral-700)', marginBottom: 4 }}>
+          No hay puntos cargados
+        </strong>
+        Aún no se registraron puntos de reciclaje en el sistema.
+      </div>
+    )
+  }
+
   if (sortedPoints.length === 0) {
     return (
-      <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-neutral-500)', fontSize: 14 }}>
+      <div style={{ padding: 32, textAlign: 'center', color: 'var(--color-neutral-500)', fontSize: 14, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
+        <strong style={{ display: 'block', color: 'var(--color-neutral-700)', marginBottom: 4 }}>
+          No se encontraron resultados
+        </strong>
         No hay puntos que coincidan con los filtros seleccionados.
       </div>
     )
