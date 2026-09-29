@@ -7,6 +7,7 @@ import { FilterBar } from './components/FilterBar'
 import { PointDetail } from './components/PointDetail'
 import { PointList } from './components/PointList'
 import { InfoView } from './components/InfoView'
+import { PointsListView } from './components/PointsListView'
 
 const VIEDMA_CENTER: [number, number] = [-40.8135, -62.9965]
 
@@ -98,7 +99,7 @@ export default function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [mapBounds, setMapBounds] = useState<L.LatLngBounds | null>(null)
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null)
-  const [activeView, setActiveView] = useState<'map' | 'info'>('map')
+  const [activeView, setActiveView] = useState<'map' | 'info' | 'points'>('map')
   const mapRef = useRef<L.Map | null>(null)
 
   const fetchPoints = async () => {
@@ -266,6 +267,25 @@ export default function App() {
               🗺️ Mapa
             </button>
             <button
+              onClick={() => setActiveView('points')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px',
+                borderRadius: 'var(--radius-md)',
+                background: activeView === 'points' ? 'var(--color-primary-50)' : 'transparent',
+                border: 'none',
+                color: activeView === 'points' ? 'var(--color-primary-700)' : 'var(--color-neutral-500)',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              📋 Puntos
+            </button>
+            <button
               onClick={() => setActiveView('info')}
               style={{
                 display: 'flex',
@@ -312,6 +332,19 @@ export default function App() {
       {/* Main content */}
       {activeView === 'info' ? (
         <InfoView onBack={() => setActiveView('map')} />
+      ) : activeView === 'points' ? (
+        <PointsListView
+          points={points}
+          loading={loading}
+          error={error}
+          userLocation={userLocation}
+          typeConfig={TYPE_CONFIG}
+          onSelect={(point) => {
+            setSelectedPoint(point)
+            setActiveView('map')
+            setRecenterTarget([point.latitude, point.longitude])
+          }}
+        />
       ) : (
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {/* Sidebar */}
